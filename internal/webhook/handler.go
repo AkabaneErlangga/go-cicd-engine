@@ -4,16 +4,19 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"go-cicd-engine/internal/job"
-	"go-cicd-engine/internal/model"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"github.com/google/uuid"	
+
+	"go-cicd-engine/internal/job"
+	"go-cicd-engine/internal/model"
+
+	"github.com/google/uuid"
 )
 
-// GITHUB_WEBHOOK_SECRET disimpan di env var
+// Ambil secret dari env
 var secret = os.Getenv("GITHUB_WEBHOOK_SECRET")
 
 func Handler(w http.ResponseWriter, r *http.Request) {
@@ -24,40 +27,65 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Read error", http.StatusBadRequest)
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
 
-	sig := r.Header.Get("X-Hub-Signature-256")
-	if !verifySignature(body, sig) {
-		http.Error(w, "Signature mismatch", http.StatusUnauthorized)
+	// Signature dari header
+	signature := r.Header.Get("X-Hub-Signature-256")
+	if !verifySignature(body, signature) {
+		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
 
-	// TODO: Parse payload, push job ke queue
-	log.Println("✅ Webhook received & verified!")
+	// Parse payload
+	var payload struct {
+		Repository struct {
+			CloneURL string `json:"clone_url"`
+		} `json:"repository"`
+		Ref string `json:"ref"` // Format: refs/heads/main
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
 
-	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("Webhook accepted"))
+	branch := extractBranch(payload.Ref)
+	if branch == "" {
+		http.Error(w, "Unsupported ref", http.StatusBadRequest)
+		return
+	}
+
+	jobID := uuid.NewString()
+	log.Printf("📥 Webhook received for repo: %s, branch: %s", payload.Repository.CloneURL, branch)
 
 	job.Enqueue(model.Job{
-		ID: uuid.NewString(),
-		RepoURL: "https://github.com/AkabaneErlangga/tes-cicd-engine",
-		Branch: "main",
-		Commands: []string{"cat README.md"},
+		ID:       jobID,
+		RepoURL:  payload.Repository.CloneURL,
+		Branch:   branch,
+		Commands: nil, // Akan diisi dari .cicd.yaml saat run
 	})
+
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("Job accepted"))
 }
 
-func verifySignature(payload []byte, signature string) bool {
+func verifySignature(body []byte, signature string) bool {
 	if secret == "" {
-		log.Println("⚠️  Warning: no secret set")
-		return true // skip verification (DEV ONLY)
+		log.Println("⚠️  No webhook secret set (SKIPPING VERIFY)")
+		return true
 	}
-
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(payload)
+	mac.Write(body)
 	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-
 	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+func extractBranch(ref string) string {
+	const prefix = "refs/heads/"
+	if len(ref) <= len(prefix) || ref[:len(prefix)] != prefix {
+		return ""
+	}
+	return ref[len(prefix):]
 }
 
