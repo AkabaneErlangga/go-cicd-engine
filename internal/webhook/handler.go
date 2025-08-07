@@ -30,6 +30,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
 	// Signature dari header
 	signature := r.Header.Get("X-Hub-Signature-256")
@@ -38,14 +39,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var payload model.PushEvent
 	// Parse payload
-	var payload struct {
-		Repository struct {
-			CloneURL string `json:"clone_url"`
-		} `json:"repository"`
-		Ref string `json:"ref"` // Format: refs/heads/main
-	}
+	
 	if err := json.Unmarshal(body, &payload); err != nil {
+		log.Printf("❌ Failed to parse webhook payload: %v", err)
 		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
@@ -53,18 +51,20 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	branch := extractBranch(payload.Ref)
 	if branch == "" {
 		http.Error(w, "Unsupported ref", http.StatusBadRequest)
-		return
-	}
 
-	jobID := uuid.NewString()
-	log.Printf("📥 Webhook received for repo: %s, branch: %s", payload.Repository.CloneURL, branch)
-
-	job.Enqueue(model.Job{
-		ID:       jobID,
+	jobData := model.Job{
+		ID: 		 uuid.NewString(),	
 		RepoURL:  payload.Repository.CloneURL,
 		Branch:   branch,
-		Commands: nil, // Akan diisi dari .cicd.yaml saat run
-	})
+		Author: payload.Pusher.Name,
+		commitMsg: payload.HeadCommit.Message,
+		status:   "pending",
+		CreatedAt: time.Now().Format(time.RFC3339),
+	}
+	
+	log.Printf("📥 Webhook received for repo: %s, branch: %s", payload.Repository.CloneURL, branch)
+
+	job.Enqueue(jobData)
 
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Job accepted"))

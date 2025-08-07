@@ -4,5 +4,8 @@ type Job struct {
 	ID 				string
 	RepoURL		string
 	Branch		string
-	Commands	[]string
+	Author		string	
+	commitMsg	string
+	status		string // "pending", "success", "failure"
+	CreatedAt	string
 }

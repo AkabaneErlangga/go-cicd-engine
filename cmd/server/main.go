@@ -3,11 +3,13 @@ package main
 import (
 	"log"
 	"net/http"
-	
+
 	"go-cicd-engine/internal/api"
 	"go-cicd-engine/internal/job"
-	"go-cicd-engine/internal/webhook"
 	"go-cicd-engine/internal/store"
+	"go-cicd-engine/internal/webhook"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -15,6 +17,11 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	log.Println("✅ Database initialized successfully")
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error reading .env file: %v", err)
+	}
 
 	mux := http.NewServeMux()
 

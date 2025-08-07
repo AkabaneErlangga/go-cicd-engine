@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go-cicd-engine/internal/model"
+	"go-cicd-engine/internal/notifier"
 	"go-cicd-engine/internal/runner"
 	"go-cicd-engine/internal/store"
 )
@@ -33,6 +34,7 @@ func StartWorker() {
 			store.UpdateJobStatus(job.ID, string(StatusRunning), nil)
 
 			log.Printf("⚙️  Running job: %s\n", job.ID)
+			notifyJob(job, "running")
 			err = runner.Execute(job, f)
 
 			switch {
@@ -40,16 +42,18 @@ func StartWorker() {
 				log.Printf("⏰ Job %s timed out", job.ID)
 				SetStatus(job.ID, StatusTimedOut)
 				store.UpdateJobStatus(job.ID, string(StatusTimedOut), &now)
-
+				notifyJob(job, "timed out")
 			case err != nil:
 				log.Printf("❌ Job %s failed: %v", job.ID, err)
 				SetStatus(job.ID, StatusFailed)
 				store.UpdateJobStatus(job.ID, string(StatusFailed), &now)
+				notifyJob(job, "failed")
 
 			default:
 				log.Printf("✅ Job %s completed", job.ID)
 				SetStatus(job.ID, StatusDone)
 				store.UpdateJobStatus(job.ID, string(StatusDone), &now)
+				notifyJob(job, "completed")
 			}
 			store.UpdateJobLogPath(job.ID, logPath)
 		}
@@ -76,5 +80,17 @@ func Enqueue(j model.Job) {
 	default:
 		log.Println("❗ Queue full. Dropping job.")
 	}
+}
+
+func notifyJob(job model.Job, status string) {
+	notifier.NotifyDiscord(notifier.Event{
+		Status: status,
+		JobID:  job.ID,
+		Repo:   job.RepoURL,
+		Branch: job.Branch,
+		Author: job.Author,
+		Timestamp: time.Now().Format(time.RFC3339),
+		CommitMsg: job.CommitMsg,
+	})
 }
 
