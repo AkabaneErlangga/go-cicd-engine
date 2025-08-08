@@ -1,11 +1,15 @@
 package model
 
+import "time"
+
 type Job struct {
 	ID 				string
 	RepoURL		string
 	Branch		string
 	Author		string	
-	commitMsg	string
-	status		string // "pending", "success", "failure"
+	CommitMsg	string
+	CommitURL	string
+	CommitTime	time.Time
+	Status		string // "pending", "success", "failure"
 	CreatedAt	string
 }

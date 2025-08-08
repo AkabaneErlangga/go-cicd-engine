@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"go-cicd-engine/internal/job"
 	"go-cicd-engine/internal/model"
@@ -51,14 +52,16 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	branch := extractBranch(payload.Ref)
 	if branch == "" {
 		http.Error(w, "Unsupported ref", http.StatusBadRequest)
-
+	}
 	jobData := model.Job{
 		ID: 		 uuid.NewString(),	
 		RepoURL:  payload.Repository.CloneURL,
 		Branch:   branch,
-		Author: payload.Pusher.Name,
-		commitMsg: payload.HeadCommit.Message,
-		status:   "pending",
+		Author: payload.HeadCommit.Author.Name,
+		CommitMsg: payload.HeadCommit.Message,
+		CommitURL: payload.HeadCommit.URL,
+		CommitTime: payload.HeadCommit.Timestamp.Local(),
+		Status:   "pending",
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 	
@@ -88,4 +91,3 @@ func extractBranch(ref string) string {
 	}
 	return ref[len(prefix):]
 }
-

@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type PushEvent struct {
 	Ref        string `json:"ref"`
 	Repository struct {
@@ -7,6 +9,8 @@ type PushEvent struct {
 	} `json:"repository"`
 	HeadCommit struct {
 		Message string `json:"message"`
+		URL       string    `json:"url"`
+		Timestamp time.Time `json:"timestamp"`
 		Author  struct {
 			Name  string `json:"name"`
 			Email string `json:"email"`

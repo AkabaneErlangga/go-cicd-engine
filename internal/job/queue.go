@@ -30,12 +30,12 @@ func StartWorker() {
 			}
 			defer f.Close()
 
-			now := time.Now()
 			store.UpdateJobStatus(job.ID, string(StatusRunning), nil)
 
 			log.Printf("⚙️  Running job: %s\n", job.ID)
 			notifyJob(job, "running")
 			err = runner.Execute(job, f)
+			now := time.Now()
 
 			switch {
 			case errors.Is(err, runner.ErrTimeout):
@@ -89,8 +89,10 @@ func notifyJob(job model.Job, status string) {
 		Repo:   job.RepoURL,
 		Branch: job.Branch,
 		Author: job.Author,
-		Timestamp: time.Now().Format(time.RFC3339),
 		CommitMsg: job.CommitMsg,
+		CommitURL: job.CommitURL,
+		CommitTime: job.CommitTime,
+		Timestamp: time.Now(),
 	})
 }
 
